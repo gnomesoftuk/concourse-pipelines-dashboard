@@ -28,6 +28,7 @@ var pipelines;
 var token;
 
 get_bearer = (callback) => {
+    console.log("get bearer token...");
     request({
       url: config.concourse_url + config.api_subdirectory + "/teams/" + config.concourse_team + "/auth/token",
       auth: {
@@ -59,12 +60,14 @@ get_pipelines = (callback) => {
 			pipelines = body;
 			callback();
 		} else {
-			console.log(error);
+			console.log("could not get pipelines " + error);
+            callback();
 		}
 	});
 }
 
 get_pipeline_statuses = (callback) => {
+    let count = 0;
 	for (pipeline of pipelines) {
 		request({
 			url: config.concourse_url + config.api_subdirectory + pipeline.url + "/jobs",
@@ -77,15 +80,24 @@ get_pipeline_statuses = (callback) => {
 			if (!error && response.statusCode === 200) {
 				for (task of body) {
 					if(task.finished_build !== undefined && task.finished_build !== null) {
-						var index = _.findIndex(pipelines, { 'name': task.finished_build.pipeline_name });
+						let index = _.findIndex(pipelines, { 'name': task.finished_build.pipeline_name });
 						if(pipelines[index]["status"] === undefined || pipelines[index]["status"] === "succeeded")
 							pipelines[index]["status"] = task.finished_build.status;
 					}
 				}
-			}
+
+			} else {
+			    console.log(error);
+            }
+
+            if (count === pipelines.length - 1) {
+                callback();
+            } else {
+			    count++;
+            }
 		});
 	}
-  callback();
+
 }
 
 app.get('/', (req, res) => {
@@ -96,17 +108,18 @@ app.get('/', (req, res) => {
         } else {
           callback();
         }
-      }, 
+      },
       get_pipelines,
       get_pipeline_statuses
-      ], 
+      ],
       function (err, result) {
+          if (err) {
+              res.end(JSON.stringify(err));
+          } else {
+              res.render('overview', {config: config, pipelines: pipelines})
+          }
       }
     )
-  
-  if (pipelines != undefined && pipelines.length != 0) {
-    res.render('overview', {config: config, pipelines: pipelines})
-  }
 });
 
 app.listen(app.get('port'), () => {
