@@ -1,3 +1,11 @@
+/* Animations */
+@keyframes running {
+    0% {background-color: #8e912c;}
+    50% {background-color: #c9cc3f; margin-top: 10px; margin-bottom: 10px;}
+    100% {background-color: #8e912c;}
+}
+
+
 body {
 	background-color: #273747;
 	text-align: center;
@@ -9,7 +17,6 @@ body {
 	position: relative;
 	height: 100%;
 	vertical-align: middle;
-
 }
 
 .footer {
@@ -22,23 +29,50 @@ body {
    line-height:  40px;
 }
 
+.hide {
+    display:none !important;
+}
+
+.title {
+    min-height: 40px;
+}
+
 .pipeline {
 	color: #e6e7e8;
 	display: inline-block;
 	padding: 5px;
-	
+    min-height: 150px;
 	width: 150px;
-	height: 150px;
 	margin: 5px;
-
+    line-height: 15px;
 	text-align: center;
-	vertical-align: middle;
+	vertical-align: top;
 
 	font-weight: bold;
 }
 
+.build-step {
+    color: #e6e7e8;
+    padding: 5px;
+
+    width: 85%;
+    margin: 5px;
+
+    text-align: center;
+    vertical-align: middle;
+
+    font-weight: bold;
+}
+
 .succeeded {
 	background-color: #2ECC71;
+}
+
+.started {
+	background-color: #c8cc3e;
+    animation-name: running;
+    animation-duration: 2s;
+    animation-iteration-count: infinite;
 }
 
 .aborted {
@@ -51,4 +85,32 @@ body {
 
 .failed {
 	background-color: #E74C3C ;
+}
+
+.paused {
+	background-color: #8e8f8e;
+}
+
+.build-step.succeeded {
+    background-color: #249e58;
+}
+
+.build-step.started {
+    background-color: #8e912c;
+}
+
+.build-step.aborted {
+    background-color: #713b24;
+}
+
+.build-step.errored {
+    background-color: #c86d1e;
+}
+
+.build-step.failed {
+    background-color: #b03a2e;
+}
+
+.build-step.paused {
+    background-color: #656665;
 }
