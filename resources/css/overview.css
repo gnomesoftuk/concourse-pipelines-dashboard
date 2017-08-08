@@ -5,6 +5,17 @@
     100% {background-color: #8e912c;}
 }
 
+@keyframes shake {
+    0%, 10% {transform:rotate(2deg)}
+    10%, 20% {transform:rotate(0deg)}
+    5%, 15% {transform:rotate(-2deg)}
+}
+
+@keyframes scroll {
+    0%{background-position:0 50%}
+    50%{background-position:100% 50%}
+    100%{background-position:0 50%}
+}
 
 body {
 	background-color: #273747;
@@ -15,14 +26,16 @@ body {
 
 .container {
 	position: relative;
-	height: 100%;
+	display:flex;
+    flex-wrap: wrap;
 	vertical-align: middle;
+    justify-content: center;
 }
 
 .footer {
    position: fixed;
-   left: 0px;
-   bottom: 0px;
+   left: 0;
+   bottom: 0;
    height: 40px;
    width: 100%;
    background: #1A252F;
@@ -33,35 +46,86 @@ body {
     display:none !important;
 }
 
+.invisible {
+    visibility: hidden;
+}
+
 .title {
     min-height: 40px;
 }
 
+.box {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 175px;
+    max-width: 175px;
+}
+
+.default-link{
+    /* all rules required to make the whole div clickable */
+    position:absolute;
+    width:100%;
+    height:100%;
+    top:0;
+    left: 0;
+    z-index: 1;
+    /* this is a fix for IE7-9 */
+    background-color:#ffffff;
+    -ms-filter:"progid:DXImageTransform.Microsoft.Alpha(Opacity=0)";
+    filter: alpha(opacity=0);
+    opacity:0;
+}
+
 .pipeline {
+    position: relative;
 	color: #e6e7e8;
-	display: inline-block;
-	padding: 5px;
-    min-height: 150px;
-	width: 150px;
-	margin: 5px;
+    padding: 5px 5px 25px 5px;
+    margin: 5px;
+
     line-height: 15px;
 	text-align: center;
 	vertical-align: top;
 
 	font-weight: bold;
+    flex: 1;
+}
+
+ul.pipeline {
+    list-style: none;
 }
 
 .build-step {
     color: #e6e7e8;
     padding: 5px;
-
-    width: 85%;
     margin: 5px;
 
     text-align: center;
     vertical-align: middle;
 
     font-weight: bold;
+}
+
+.version {
+    position: relative;
+    background-color: #8e878a;
+    border: 1px solid #787275;
+    padding: 5px;
+
+    margin: 5px;
+
+    text-align: center;
+    vertical-align: middle;
+    font-weight: bold;
+    flex-grow: 0;
+    min-height: 25px;
+    max-height: 25px;
+}
+
+.newversion {
+    background: linear-gradient(270deg, #8e878a, #aba23a);
+    background-size: 400% 400%;
+    animation: scroll 7s ease infinite;
 }
 
 .succeeded {

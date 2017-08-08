@@ -1,10 +1,12 @@
 var express = require('express');
 var bodyParser = require('body-parser');
-var config = require('./config')
-var request = require('request')
+var config = require('./config');
+var request = require('request');
 var _ = require('lodash');
-var async = require('async')
-var basicAuth = require('express-basic-auth')
+var async = require('async');
+var basicAuth = require('express-basic-auth');
+var doVersions = require('./lib/versions');
+
 
 var app = express();
 
@@ -25,8 +27,9 @@ if (config.enable_basic_auth) {
 }
 
 var pipelines;
+var recentlyRunCache = [];
 var token;
-var allBuildSteps = [];
+var buildStepsCache = [];
 var stepCount = 0;
 
 
@@ -34,7 +37,7 @@ var stepCount = 0;
 // we can fetch the pipeline / jobs every minute and then just get the build
 // statuses every 5 seconds.
 get_bearer = (callback) => {
-    //console.log("get bearer token...");
+    console.log("get bearer token...");
     request({
         url: config.concourse_url + config.api_subdirectory + "/teams/" + config.concourse_team + "/auth/token",
         auth: {
@@ -49,10 +52,11 @@ get_bearer = (callback) => {
             callback();
         } else {
             console.log(error);
+            callback(error);
         }
     });
-}
-// TODO: as something is building I want to see the current step pop inside the current one
+};
+
 get_pipelines = (callback) => {
     request({
         url: config.concourse_url + config.api_subdirectory + "/pipelines",
@@ -70,23 +74,29 @@ get_pipelines = (callback) => {
             callback();
         }
     });
-}
+};
 
 get_pipeline_statuses = (callback) => {
     let count = 0;
     // reset cache of build steps
-    allBuildSteps = [];
+    buildStepsCache = [];
     stepCount = 0;
+    console.log("start all pipelines");
     for (pipeline of pipelines) {
+
+        pipeline.buildSteps = [];
 
         // if pipeline paused we don't care about it's status
         if (pipeline.paused) {
             pipeline.status = 'paused';
+            count++;
+            continue;
         }
 
-        pipeline.buildSteps = [];
         let jobUrl = config.concourse_url + config.api_subdirectory + pipeline.url + "/jobs";
-        console.log(jobUrl);
+        if (config.debug) {
+            console.log(jobUrl);
+        }
         request({
             url: jobUrl,
             headers: {
@@ -105,26 +115,37 @@ get_pipeline_statuses = (callback) => {
                         buildStep.name = task.name;
 
                         let currentPipeline = pipelines[index];
-                        if (currentPipeline.paused) {
-                            buildStep.status = 'paused'
-                        }
+
                         buildStep.url = jobUrl + "/" + buildStep.name + "/builds";
                         buildStep.ofPipeline = currentPipeline;
+
                         currentPipeline.buildSteps.push(buildStep);
 
                         // index the build steps and keep track of how many there are
-                        allBuildSteps[buildStep.id] = buildStep;
+                        buildStepsCache[buildStep.id] = buildStep;
                         stepCount++;
 
-                        // record start time for sorting
-                        currentPipeline.start_time = task.finished_build.start_time;
+                        // record start and end times for pipeline sorting
+                        // as multiple jobs can run for one pipeline we take
+                        // the earliest start time and the latest end time.
+                        let taskStartTime = task.finished_build.start_time;
+                        if (!currentPipeline.start_time || taskStartTime < currentPipeline.start_time) {
+                            currentPipeline.start_time = taskStartTime;
+                        }
+                        let taskEndTime = task.finished_build.end_time;
+                        if (!currentPipeline.end_time || taskEndTime > currentPipeline.end_time) {
+                            currentPipeline.end_time = taskEndTime;
+                        }
+
+                        if (currentPipeline.paused) {
+                            buildStep.status = 'paused'
+                        }
 
                         if (currentPipeline["status"] === undefined || currentPipeline["status"] === "succeeded") {
                             currentPipeline["status"] = task.finished_build.status;
                         }
                     }
                 }
-
             } else {
                 console.log(error);
             }
@@ -138,16 +159,16 @@ get_pipeline_statuses = (callback) => {
         });
     }
 
-}
+};
 
-function orderPipeline(callback) {
+orderPipeline = (callback) => {
     // sort by start time descending
     // ie latest build moves to front
     pipelines.sort((a, b) => {
-        return b.start_time - a.start_time;
+        return b.end_time - a.end_time;
     });
 
-    let maxSize = 16;
+    let maxSize = config.maxAllowedPipelines;
     let size = 0;
     for (let index = 0; index < pipelines.length - 1; index++) {
         if (size > maxSize) {
@@ -155,24 +176,49 @@ function orderPipeline(callback) {
             continue;
         }
         if (pipelines[index].paused) {
-           // console.log("pipeline " + pipelines[index].name + " paused : " + pipelines[index].paused);
+            // console.log("pipeline " + pipelines[index].name + " paused : " + pipelines[index].paused);
             pipelines[index].display = 'hide';
         } else {
             pipelines[index].display = 'show';
             size++;
         }
+
+        // sort build steps by start time ascending
+        pipelines[index].buildSteps.sort((a, b) => {
+            return a.start_time - b.start_time;
+        });
     }
 
     callback();
-}
+};
 
-function get_build_statuses(callback) {
+determine_recent_builds = (callback) => {
+    for (pipeline of pipelines) {
+        // look in cache
+        let recentlyRun = recentlyRunCache[pipeline.name];
+        if (!recentlyRun) {
+            recentlyRun = {};
+        }
+        // console.log(recentlyRun.end_time);
+        // console.log(currentPipeline.end_time);
+        if (recentlyRun.end_time !== pipeline.end_time) {
+            console.log("pipeline " + pipeline.name + " has recently finished");
+            recentlyRun.end_time = pipeline.end_time;
+            recentlyRunCache[pipeline.name] = recentlyRun;
+            pipeline.finished_recently = true;
+        }
+    }
+    callback();
+
+};
+
+get_build_statuses = (callback) => {
     let count = 0;
-
-    console.log("How many steps " + stepCount);
-    for (let index in allBuildSteps) {
-        console.log(index);
-        let buildStep = allBuildSteps[index];
+    if (config.debug) {
+        console.log("How many steps " + stepCount);
+    }
+    for (let index in buildStepsCache) {
+        let buildStep = buildStepsCache[index];
         request({
                 url: buildStep.url,
                 headers: {
@@ -187,11 +233,10 @@ function get_build_statuses(callback) {
                     // only use the last build
                     if (buildStep.ofPipeline.status !== 'paused') {
                         buildStep.status = body[0].status;
-                        console.log("step " + buildStep.id + " is " + buildStep.status);
-                        // console.log(JSON.stringify(body));
+                        //console.log("step " + buildStep.id + " is " + buildStep.status);
                     }
                 }
-                if (count === stepCount -1) {
+                if (count === stepCount - 1) {
                     console.log("counted all steps");
                     callback();
                 } else {
@@ -200,28 +245,61 @@ function get_build_statuses(callback) {
             }
         )
     }
-}
+};
+
+getVersions = (callback) => {
+    if (config.enableVersions) {
+        doVersions.fetchVersions(pipelines, callback);
+    } else {
+        callback();
+    }
+};
+
+ensureAuth = (callback) => {
+    if (config.use_bearer_token) {
+        get_bearer(callback);
+    } else {
+        callback();
+    }
+};
+
+doRenderResults = (res) => {
+    return function (err) {
+        if (err) {
+            res.end(JSON.stringify(err));
+        } else {
+            res.render('overview', {config: config, pipelines: pipelines})
+        }
+    }
+};
+
+let lastUpdate;
+let startTime;
 
 app.get('/', (req, res) => {
+    startTime = new Date().getTime();
+    let renderResults = doRenderResults(res);
+
+    let refreshInMilliseconds = config.refresh_in_seconds * 1000;
+    if (lastUpdate && new Date().getTime() - lastUpdate.getTime() < refreshInMilliseconds) {
+        console.log("Skipping data refresh...");
+        return renderResults();
+    }
     async.series([
-            function (callback) {
-                if (config.use_bearer_token) {
-                    get_bearer(callback);
-                } else {
-                    callback();
-                }
-            },
+            ensureAuth,
             get_pipelines,
             get_pipeline_statuses,
             get_build_statuses,
-            orderPipeline
+            determine_recent_builds,
+            orderPipeline,
+            getVersions
         ],
-        function (err, result) {
-            if (err) {
-                res.end(JSON.stringify(err));
-            } else {
-                res.render('overview', {config: config, pipelines: pipelines})
+        function (err) {
+            if (!err) {
+                console.log((new Date().getTime() - startTime) / 1000 + " seconds");
+                lastUpdate = new Date();
             }
+            renderResults(err);
         }
     )
 });
