@@ -249,7 +249,7 @@ get_build_statuses = (callback) => {
 
 getVersions = (callback) => {
     if (config.enableVersions) {
-        doVersions.fetchVersions(pipelines, callback);
+        doVersions.fetchVersionsAsync(pipelines, callback);
     } else {
         callback();
     }
