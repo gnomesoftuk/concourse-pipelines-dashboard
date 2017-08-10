@@ -26,7 +26,7 @@ if (config.enable_basic_auth) {
         realm: "concourse-dashboard"
     }))
 }
-get_bearer = (callback) => {
+const get_bearer = (callback) => {
 
     console.log("get bearer token...");
     request({
@@ -48,7 +48,7 @@ get_bearer = (callback) => {
     });
 };
 
-ensureAuth = (callback) => {
+const ensureAuth = (callback) => {
     if (config.use_bearer_token) {
         get_bearer(callback);
     } else {
@@ -56,14 +56,14 @@ ensureAuth = (callback) => {
     }
 };
 
-doRenderResults = (res) => {
+const doRenderResults = (res) => {
     return function (err, pipelines) {
         if (err) {
             res.end(JSON.stringify(err));
         } else {
             res.render('overview', {config: config, pipelines: pipelines})
         }
-    }
+    };
 };
 
 let lastUpdate;
@@ -78,6 +78,7 @@ app.get('/', (req, res) => {
         console.log("Skipping data refresh...");
         return renderResults(null, doPipelines.getPipelineCache());
     }
+
     async.waterfall([
             ensureAuth,
             doPipelines.getPipelinesAsync,
