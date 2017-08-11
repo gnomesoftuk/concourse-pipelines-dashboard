@@ -6,7 +6,8 @@ const express = require('express'),
     async = require('async'),
     basicAuth = require('express-basic-auth'),
     doVersions = require('./lib/versions'),
-    doPipelines = require('./lib/pipelines');
+    doPipelines = require('./lib/pipelines'),
+    logger = require('./lib/logger');
 
 
 const app = express();
@@ -24,11 +25,11 @@ if (config.enable_basic_auth) {
         users: dashboard_user,
         challenge: true,
         realm: "concourse-dashboard"
-    }))
+    }));
 }
 const get_bearer = (callback) => {
 
-    console.log("get bearer token...");
+    logger.info("get bearer token...");
     request({
         url: config.concourse_url + config.api_subdirectory + "/teams/" + config.concourse_team + "/auth/token",
         auth: {
@@ -36,13 +37,14 @@ const get_bearer = (callback) => {
             password: config.concourse_password
         },
         json: true,
-        strictSSL: false
+        strictSSL: false,
+        timeout: config.http_request_timeout
     }, (error, response, body) => {
         if (!error && response.statusCode === 200) {
             let token = body.value;
             callback(null, token);
         } else {
-            console.log(error);
+            logger.debug(error);
             callback(error);
         }
     });
@@ -75,7 +77,7 @@ app.get('/', (req, res) => {
 
     let refreshInMilliseconds = config.refresh_in_seconds * 1000;
     if (lastUpdate && new Date().getTime() - lastUpdate.getTime() < refreshInMilliseconds) {
-        console.log("Skipping data refresh...");
+        logger.info("Skipping data refresh...");
         return renderResults(null, doPipelines.getPipelineCache());
     }
 
@@ -86,14 +88,14 @@ app.get('/', (req, res) => {
         ],
         function (err, pipelines) {
             if (!err) {
-                console.log((new Date().getTime() - startTime) / 1000 + " seconds");
+                logger.info((new Date().getTime() - startTime) / 1000 + " seconds");
                 lastUpdate = new Date();
             }
             renderResults(err, pipelines);
         }
-    )
+    );
 });
 
 app.listen(app.get('port'), () => {
-    console.log('running on port', app.get('port'));
+    logger.info('running on port ', app.get('port'));
 });
