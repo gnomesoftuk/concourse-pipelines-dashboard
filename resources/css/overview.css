@@ -32,6 +32,17 @@ body {
     justify-content: center;
 }
 
+.errors {
+    position: relative;
+    display:inline-block;
+    vertical-align: middle;
+    justify-content: center;
+    width: 100%;
+    padding: 5px 5px 10px 5px;
+    background-color: #991a0a;
+    border: 1px solid #000000;
+}
+
 .footer {
    position: fixed;
    left: 0;

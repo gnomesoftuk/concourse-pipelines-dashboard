@@ -5,6 +5,9 @@ html
         link(rel='stylesheet' href='css/overview.css')
         meta(http-equiv="refresh" content="10")
     body
+        div(class='errors ' + errors.display)
+            h2()='Server error:'
+            div()=errors.message
         .container
                 each pipeline in pipelines
                     div(class='box ' + pipeline.display)
