@@ -47,10 +47,10 @@ const get_bearer = (callback) => {
     }, (error, response, body) => {
         if (!error && response.statusCode === 200) {
             let token = body.value;
-            callback(null, token);
+            return callback(null, token);
         } else {
-            logger.debug(error);
-            callback(error);
+            logger.warn(error);
+            return callback(error);
         }
     });
 };
@@ -59,7 +59,7 @@ const ensureAuth = (callback) => {
     if (config.use_bearer_token) {
         get_bearer(callback);
     } else {
-        callback();
+        return callback();
     }
 };
 
@@ -81,7 +81,7 @@ const doRenderResults = (res) => {
 function haltOnTimedout(req, res, next) {
     let renderResults = doRenderResults(res);
     req.on('timeout', function () {
-        logger.error("timeout after " + config.server_timeout_seconds + " seconds");
+        logger.error(`Timeout after ${config.server_timeout_seconds} seconds`);
         let errors = 'Sadly the request timed out after ' + config.server_timeout_seconds + ' seconds...';
         renderResults(errors, doPipelines.getPipelineCache());
     });
